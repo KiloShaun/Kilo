@@ -26,7 +26,9 @@ describe('Staff provisioning (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.useGlobalPipes(
+      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+    );
     await app.init();
 
     prisma = app.get(PrismaService);
@@ -112,7 +114,12 @@ describe('Staff provisioning (e2e)', () => {
     const driverCreate = await request(app.getHttpServer())
       .post('/drivers')
       .set('Authorization', `Bearer ${superAdminToken}`)
-      .send({ email: 'driver-for-scope-test@homesafe.test', firstName: 'John', lastName: 'Mokoena', licenseNumber: 'DL-1' })
+      .send({
+        email: 'driver-for-scope-test@homesafe.test',
+        firstName: 'John',
+        lastName: 'Mokoena',
+        licenseNumber: 'DL-1',
+      })
       .expect(201);
     const driverLogin = await request(app.getHttpServer())
       .post('/auth/accept-invite')
@@ -145,7 +152,12 @@ describe('Staff provisioning (e2e)', () => {
     await request(app.getHttpServer())
       .post('/school-admins')
       .set('Authorization', `Bearer ${superAdminToken}`)
-      .send({ email: 'admin2@homesafe.test', firstName: 'A', lastName: 'B', schoolId: '00000000-0000-0000-0000-000000000000' })
+      .send({
+        email: 'admin2@homesafe.test',
+        firstName: 'A',
+        lastName: 'B',
+        schoolId: '00000000-0000-0000-0000-000000000000',
+      })
       .expect(404);
   });
 });
