@@ -24,7 +24,8 @@ class EnvironmentVariables {
   @IsInt()
   @Min(1)
   @Max(65535)
-  PORT: number;
+  @IsOptional()
+  PORT?: number;
 
   @IsString()
   @IsNotEmpty()
