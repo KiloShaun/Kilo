@@ -212,28 +212,35 @@ Network restored → flush queue in order → server dedupes by idempotency key
 ```
 HomeSafe/ (this repo)
 ├── apps/
-│   └── api/                     # NestJS modular monolith (backend)
-│       ├── prisma/              # schema.prisma, migrations
-│       ├── src/
-│       │   ├── auth/            # Phase 1
-│       │   ├── users/           # Phase 1
-│       │   ├── schools/         # Phase 2
-│       │   ├── parents/         # Phase 2
-│       │   ├── children/        # Phase 2
-│       │   ├── drivers/         # Phase 2
-│       │   ├── vehicles/        # Phase 2
-│       │   ├── routes/          # Phase 3 (scaffolded)
-│       │   ├── journeys/        # Phase 3/5 (scaffolded)
-│       │   ├── tracking/        # Phase 5 (scaffolded)
-│       │   ├── notifications/   # Phase 8 (scaffolded)
-│       │   ├── emergency/       # Phase 10 (scaffolded)
-│       │   ├── audit/           # cross-cutting
-│       │   └── common/          # guards, filters, interceptors, decorators
-│       └── test/
-├── docs/                        # this document + ERD, API spec, roadmap, security, testing
-├── docker-compose.yml           # postgres + redis + api, for local dev
+│   ├── api/                      # NestJS modular monolith (backend)
+│   │   ├── prisma/               # schema.prisma, migrations
+│   │   ├── src/
+│   │   │   ├── auth/             # Phase 1 — login/register/refresh/bootstrap/accept-invite
+│   │   │   ├── accounts/         # shared invited-account provisioning (used by drivers/
+│   │   │   │                     #   school-admins/transport-operators)
+│   │   │   ├── users/            # Phase 1
+│   │   │   ├── schools/          # Phase 2
+│   │   │   ├── parents/          # Phase 2
+│   │   │   ├── children/        # Phase 2
+│   │   │   ├── drivers/          # Phase 2
+│   │   │   ├── vehicles/         # Phase 2
+│   │   │   ├── transport-operators/ # Phase 2
+│   │   │   ├── school-admins/    # Phase 2
+│   │   │   ├── audit/            # cross-cutting
+│   │   │   └── common/           # guards, filters, interceptors, decorators, config
+│   │   └── test/
+│   └── admin-web/                 # Phase 9 (partial) — React + Vite, calls the real API
+│       └── src/
+├── docs/                         # this document + ERD, API spec, roadmap, security, testing
+├── docker-compose.yml            # postgres + redis + api, for local dev
 └── .github/workflows/ci.yml
 ```
+
+`routes/`, `journeys/`, `tracking/`, `notifications/`, and `emergency/` (Phases 3/5/7/8/10)
+don't exist as code yet — only as schema (see `docs/domain-model-erd.md`) and as planned
+endpoints in `docs/api-spec.yaml` (`x-status: planned`). They'll be added as their own
+modules under `apps/api/src/` when those phases are built, following the same pattern as
+the modules above.
 
 Mobile apps (`apps/parent-mobile`, `apps/driver-mobile`, `apps/child-mobile`) and the admin
 web dashboard (`apps/admin-web`) are added as their own workspace packages starting Phase 4,

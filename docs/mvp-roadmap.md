@@ -13,7 +13,7 @@ no phase is "half of a feature."
 | 6 | Parent mobile application | Not started |
 | 7 | Child pickup/drop-off verification | Schema modeled (`JourneyEvent`, `ChildJourney`); not implemented |
 | 8 | Notifications | Schema modeled (`Notification`); event bus scaffolded |
-| 9 | Admin dashboard (web) | Not started |
+| 9 | Admin dashboard (web) | **Minimal slice built** — auth (login/bootstrap/accept-invite), schools, staff provisioning, children |
 | 10 | Emergency / SOS | Schema modeled (`EmergencyIncident`); not implemented |
 | 11 | Analytics and reporting | Not started |
 
@@ -43,6 +43,13 @@ post-core-platform, per the brief.
   - Unit tests for auth/accounts/scoping and an e2e suite covering the full
     bootstrap → provision → accept-invite → login chain plus the critical-path
     parent-scoping boundary (a parent cannot read another parent's child).
+- A minimal real admin web UI (`apps/admin-web`, React + TypeScript + Vite) that calls the
+  live API — no mock data. Covers login/first-time bootstrap/accept-invite, listing and
+  creating schools, provisioning drivers/school-admins/transport-operators (surfacing the
+  one-time invite token the admin must relay), and creating/looking up children. This is a
+  thin slice of Phase 9, not the full admin dashboard (no routes/journeys/live-ops views
+  yet, since those depend on Phases 3/5/7 below) — but it's genuinely functional, not a
+  prototype: every action in it is a real request against the real backend.
 
 ## Why stop the implementation here for this iteration
 

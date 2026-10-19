@@ -36,6 +36,9 @@ Start here before touching code:
 - A complete Prisma schema for the full data model described in the product brief (routes,
   journeys, GPS tracking, notifications, emergency incidents, audit log), so later phases
   are additive migrations rather than a redesign.
+- **Phase 9 (partial) — Admin web UI**: a minimal real dashboard (`apps/admin-web`, React +
+  Vite) that logs in/bootstraps/accepts invites, lists and creates schools, provisions
+  staff, and creates/looks up children — every action is a real call to the live API.
 
 See [`docs/mvp-roadmap.md`](docs/mvp-roadmap.md) for what's next and why the implementation
 stops where it does in this iteration.
@@ -53,6 +56,16 @@ npm run start:dev
 API docs (Swagger UI) are served at `http://localhost:3000/api/docs` once the server is
 running.
 
+To also run the admin web UI against it:
+
+```bash
+cp apps/admin-web/.env.example apps/admin-web/.env.local
+npm run --workspace apps/admin-web dev
+```
+
+Open `http://localhost:5173`. On a fresh database, use the "First-time setup" tab to
+bootstrap the first `SUPER_ADMIN`.
+
 ### Tests
 
 ```bash
@@ -66,9 +79,11 @@ npm run test:e2e      # integration tests (requires DATABASE_URL)
 ```
 apps/
   api/            NestJS backend (modular monolith)
+  admin-web/      minimal admin dashboard (React + Vite) — Phase 9, partial
 docs/             architecture, ERD, API spec, security, testing, roadmap
 docker-compose.yml
 ```
 
-Mobile apps (parent, driver, child) and the admin web dashboard are added as their own
-workspaces starting at Phase 4/6/9 of the roadmap, once the API they depend on is stable.
+Mobile apps (parent, driver, child) are added as their own workspaces starting at Phase
+4/6 of the roadmap, once the API they depend on is stable. The admin web app will grow
+routes/journeys/live-ops views as those phases land.

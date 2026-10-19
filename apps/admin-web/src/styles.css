@@ -1,0 +1,233 @@
+:root {
+  --ink: #15201d;
+  --ink-soft: #5c6b67;
+  --bg: #f6f7f5;
+  --surface: #ffffff;
+  --line: #e3e8e5;
+  --brand: #1e6f63;
+  --brand-soft: #e1f0ec;
+  --red: #c23b32;
+  --red-soft: #fbe7e4;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Work Sans', system-ui, sans-serif;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.loading-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  color: var(--ink-soft);
+}
+
+.auth-screen {
+  max-width: 420px;
+  margin: 10vh auto;
+  padding: 32px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+
+.auth-screen h1 {
+  margin: 0 0 4px;
+  font-size: 22px;
+}
+
+.subtitle {
+  color: var(--ink-soft);
+  font-size: 13px;
+  margin: 0 0 20px;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.tabs.small {
+  margin-bottom: 14px;
+}
+
+.tabs button {
+  flex: 1;
+  background: none;
+  border: none;
+  padding: 10px 8px;
+  font-size: 13px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.tabs button.active {
+  color: var(--brand);
+  border-bottom-color: var(--brand);
+  font-weight: 600;
+}
+
+.tabs button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin-bottom: 12px;
+}
+
+input,
+select {
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 14px;
+  color: var(--ink);
+  background: var(--surface);
+}
+
+button[type='submit'],
+.panel > button,
+header button {
+  background: var(--brand);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.hint {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+.error-banner {
+  background: var(--red-soft);
+  color: var(--red);
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.dashboard {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.dashboard header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.role-badge {
+  display: inline-block;
+  margin-left: 8px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 10px;
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.panel h2 {
+  margin-top: 0;
+  font-size: 16px;
+}
+
+.panel h3 {
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin: 20px 0 8px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 16px;
+  font-size: 13px;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.mono {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.inline-form {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.inline-form input {
+  flex: 1;
+}
+
+.stacked-form {
+  max-width: 420px;
+}
+
+.invite-result {
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--brand-soft);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.invite-token {
+  display: block;
+  margin-top: 6px;
+  word-break: break-all;
+  background: var(--surface);
+  padding: 8px;
+  border-radius: 6px;
+}
