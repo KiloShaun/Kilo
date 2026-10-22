@@ -1,11 +1,13 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 
 import configuration from './common/config/configuration';
 import { validateEnv } from './common/config/env.validation';
 import { PrismaModule } from './common/prisma/prisma.module';
+import { RedisModule } from './common/redis/redis.module';
 import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
@@ -24,6 +26,11 @@ import { DriversModule } from './drivers/drivers.module';
 import { VehiclesModule } from './vehicles/vehicles.module';
 import { TransportOperatorsModule } from './transport-operators/transport-operators.module';
 import { SchoolAdminsModule } from './school-admins/school-admins.module';
+import { RoutesModule } from './routes/routes.module';
+import { JourneysModule } from './journeys/journeys.module';
+import { TrackingModule } from './tracking/tracking.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { EmergencyModule } from './emergency/emergency.module';
 
 @Module({
   imports: [
@@ -35,7 +42,9 @@ import { SchoolAdminsModule } from './school-admins/school-admins.module';
     ThrottlerModule.forRoot({
       throttlers: [{ ttl: 60_000, limit: 100 }],
     }),
+    EventEmitterModule.forRoot(),
     PrismaModule,
+    RedisModule,
     AuditModule,
     AccountsModule,
     AuthModule,
@@ -47,6 +56,11 @@ import { SchoolAdminsModule } from './school-admins/school-admins.module';
     VehiclesModule,
     TransportOperatorsModule,
     SchoolAdminsModule,
+    RoutesModule,
+    JourneysModule,
+    TrackingModule,
+    NotificationsModule,
+    EmergencyModule,
   ],
   providers: [
     // Guards run in order: rate limit first, then authenticate, then authorize.

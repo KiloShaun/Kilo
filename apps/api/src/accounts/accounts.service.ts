@@ -1,13 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Prisma, User } from '@prisma/client';
+import { Driver, Parent, Prisma, User } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { randomBytes, createHash } from 'crypto';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { ConflictDomainError } from '../common/errors/domain-error';
 
 export interface InvitedAccountResult {
-  user: User;
+  user: User & { driver: Driver | null; parent: Parent | null };
   /**
    * The one-time plaintext invite token. Only the caller (an authenticated admin) ever sees
    * this — only its SHA-256 hash is persisted. Until a real email/SMS provider is wired up
@@ -57,6 +57,7 @@ export class AccountsService {
         passwordHash,
         accountInvite: { create: { tokenHash, expiresAt } },
       },
+      include: { driver: true, parent: true },
     });
 
     return { user, inviteToken };

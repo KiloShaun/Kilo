@@ -231,3 +231,61 @@ td {
   padding: 8px;
   border-radius: 6px;
 }
+
+.status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.status-badge.status-cancelled {
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.event-list {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+  font-size: 13px;
+}
+
+.event-list li {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.incident {
+  border-left: 4px solid var(--ink-soft);
+  padding-left: 10px !important;
+}
+
+.incident-triggered {
+  border-left-color: var(--red);
+  background: var(--red-soft);
+}
+
+.incident-acknowledged {
+  border-left-color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.incident-actions {
+  margin-left: 12px;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.incident-actions button {
+  padding: 4px 10px;
+  font-size: 12px;
+  background: var(--brand);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}

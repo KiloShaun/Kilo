@@ -1,5 +1,17 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { api, ApiError, AuthenticatedUser, Child, InvitedAccountResult, School } from './api';
+import {
+  api,
+  ApiError,
+  AuthenticatedUser,
+  Child,
+  Driver,
+  InvitedAccountResult,
+  Journey,
+  Route,
+  School,
+  Vehicle,
+} from './api';
+import { EmergencyPanel, FleetPanel, JourneysPanel, NotificationsPanel, RoutesPanel } from './OperationsPanels';
 
 interface Props {
   token: string;
@@ -232,6 +244,28 @@ function ChildrenPanel({ token, schools }: { token: string; schools: School[] })
   const [lookupResult, setLookupResult] = useState<Child | null>(null);
   const [lookupError, setLookupError] = useState<unknown>(null);
 
+  const [parentEmail, setParentEmail] = useState('');
+  const [parentLookupError, setParentLookupError] = useState<unknown>(null);
+  const [parentLookupBusy, setParentLookupBusy] = useState(false);
+
+  async function handleFindParent(e: FormEvent) {
+    e.preventDefault();
+    setParentLookupError(null);
+    setParentLookupBusy(true);
+    try {
+      const result = await api.findParentByEmail(token, parentEmail);
+      if (result.data.length === 0) {
+        setParentLookupError(new Error('No parent account found with that email.'));
+      } else {
+        setParentId(result.data[0].id);
+      }
+    } catch (err) {
+      setParentLookupError(err);
+    } finally {
+      setParentLookupBusy(false);
+    }
+  }
+
   async function handleCreate(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -279,10 +313,22 @@ function ChildrenPanel({ token, schools }: { token: string; schools: School[] })
           <input
             value={parentId}
             onChange={(e) => setParentId(e.target.value)}
-            placeholder="UUID of an existing Parent record"
+            placeholder="Find by email below, or paste a Parent UUID"
             required
           />
         </label>
+        <ErrorText error={parentLookupError} />
+        <div className="inline-form" style={{ marginBottom: 12 }}>
+          <input
+            type="email"
+            placeholder="Parent's account email"
+            value={parentEmail}
+            onChange={(e) => setParentEmail(e.target.value)}
+          />
+          <button type="button" onClick={handleFindParent} disabled={parentLookupBusy || !parentEmail}>
+            {parentLookupBusy ? 'Finding…' : 'Find parent'}
+          </button>
+        </div>
         <label>
           School
           <select value={schoolId} onChange={(e) => setSchoolId(e.target.value)} required>
@@ -321,15 +367,41 @@ function ChildrenPanel({ token, schools }: { token: string; schools: School[] })
 
 export default function Dashboard({ token, user, onLogout }: Props) {
   const [schools, setSchools] = useState<School[]>([]);
+  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [routes, setRoutes] = useState<Route[]>([]);
+  const [journeys, setJourneys] = useState<Journey[]>([]);
+
+  const canManage = user.role === 'SUPER_ADMIN' || user.role === 'TRANSPORT_OPERATOR';
+  const canManageRoutes = canManage || user.role === 'SCHOOL_ADMIN';
 
   useEffect(() => {
     api
       .listSchools(token)
       .then((result) => setSchools(result.data))
       .catch(() => undefined);
+    if (canManage) {
+      api
+        .listDrivers(token)
+        .then((result) => setDrivers(result.data))
+        .catch(() => undefined);
+      api
+        .listVehicles(token)
+        .then((result) => setVehicles(result.data))
+        .catch(() => undefined);
+    }
+    if (canManageRoutes) {
+      api
+        .listRoutes(token)
+        .then((result) => setRoutes(result.data))
+        .catch(() => undefined);
+      api
+        .listJourneys(token)
+        .then((result) => setJourneys(result.data))
+        .catch(() => undefined);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
-
-  const canManage = user.role === 'SUPER_ADMIN' || user.role === 'TRANSPORT_OPERATOR';
 
   return (
     <div className="dashboard">
@@ -345,13 +417,19 @@ export default function Dashboard({ token, user, onLogout }: Props) {
 
       <SchoolsPanel token={token} canCreate={canManage} onSchoolCreated={(s) => setSchools((prev) => [...prev, s])} />
 
-      {(user.role === 'SUPER_ADMIN' || user.role === 'TRANSPORT_OPERATOR') && (
-        <ProvisionPanel token={token} role={user.role} schools={schools} />
-      )}
+      {canManage && <ProvisionPanel token={token} role={user.role} schools={schools} />}
 
-      {(user.role === 'SUPER_ADMIN' || user.role === 'TRANSPORT_OPERATOR' || user.role === 'SCHOOL_ADMIN') && (
-        <ChildrenPanel token={token} schools={schools} />
-      )}
+      {(canManage || user.role === 'SCHOOL_ADMIN') && <ChildrenPanel token={token} schools={schools} />}
+
+      {canManage && <FleetPanel token={token} />}
+
+      {canManageRoutes && <RoutesPanel token={token} schools={schools} drivers={drivers} vehicles={vehicles} />}
+
+      {canManageRoutes && <JourneysPanel token={token} routes={routes} user={user} />}
+
+      {canManage && <EmergencyPanel token={token} journeys={journeys} />}
+
+      <NotificationsPanel token={token} />
     </div>
   );
 }
