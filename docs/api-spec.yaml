@@ -3,10 +3,16 @@ info:
   title: HomeSafe API
   version: 0.1.0
   description: >
-    School transport safety and tracking platform API. Endpoints marked
-    `x-status: implemented` exist in apps/api today; `x-status: planned`
-    describes the target shape for a future phase (see docs/mvp-roadmap.md)
-    and is documented now so the contract is designed before it's built.
+    School transport safety and tracking platform API. Every endpoint below is implemented
+    (see docs/mvp-roadmap.md for what remains unbuilt platform-wide, e.g. analytics). This
+    file curates the conceptually important endpoints with examples; it is not regenerated
+    from the server, so for an exhaustive, always-accurate list of every route, request and
+    response shape, see the live Swagger UI at /api/docs (or /api/docs-json) — it is
+    generated directly from the NestJS controllers and cannot drift from the real API the
+    way a hand-maintained spec can. Several routes/journeys/emergency endpoints added after
+    this file was first written are listed at the bottom without full request/response
+    detail for that reason, rather than duplicating (and risking disagreeing with) the
+    generated spec.
 servers:
   - url: /api/v1
 tags:
@@ -335,7 +341,7 @@ paths:
   /routes/{id}:
     get:
       tags: [routes]
-      x-status: planned
+      x-status: implemented
       summary: Get a route with its stops and assigned children/driver/vehicle
       security: [{ bearerAuth: [] }]
       parameters:
@@ -350,7 +356,7 @@ paths:
   /journeys/{id}:
     get:
       tags: [journeys]
-      x-status: planned
+      x-status: implemented
       summary: Get a journey's current state, including per-child status
       security: [{ bearerAuth: [] }]
       parameters:
@@ -365,7 +371,7 @@ paths:
   /journeys/{id}/start:
     post:
       tags: [journeys]
-      x-status: planned
+      x-status: implemented
       summary: Driver starts a route (SCHEDULED -> DRIVER_STARTED)
       security: [{ bearerAuth: [] }]
       parameters:
@@ -377,7 +383,7 @@ paths:
   /journeys/{id}/end:
     post:
       tags: [journeys]
-      x-status: planned
+      x-status: implemented
       summary: Driver ends a route (-> COMPLETED)
       security: [{ bearerAuth: [] }]
       parameters:
@@ -388,7 +394,7 @@ paths:
   /journeys/{id}/children/{childId}/pickup:
     post:
       tags: [journeys]
-      x-status: planned
+      x-status: implemented
       summary: Confirm a child's pickup (idempotent; verificationMethod required)
       security: [{ bearerAuth: [] }]
       parameters:
@@ -424,7 +430,7 @@ paths:
   /journeys/{id}/children/{childId}/dropoff:
     post:
       tags: [journeys]
-      x-status: planned
+      x-status: implemented
       summary: Confirm a child's drop-off
       security: [{ bearerAuth: [] }]
       parameters:
@@ -436,31 +442,42 @@ paths:
       responses:
         '200': { description: Drop-off recorded }
 
-  /journeys/{id}/location:
+  /tracking/locations:
     post:
       tags: [tracking]
-      x-status: planned
-      summary: Ingest one or more GPS points from the driver app (batched, idempotent by eventId)
+      x-status: implemented
+      summary: >
+        Driver reports one GPS point for a journey they are assigned to. Persisted to
+        Postgres as a sampled trail and written to Redis as the latest point (which the
+        /tracking/journeys/{id}/location read below and the WebSocket gateway both serve
+        from). One point per call, not a batch — the driver app's send loop calls this on
+        an interval rather than batching client-side.
       security: [{ bearerAuth: [] }]
-      parameters:
-        - $ref: '#/components/parameters/IdParam'
       requestBody:
         content:
           application/json:
             schema:
               type: object
+              required: [journeyId, latitude, longitude]
               properties:
-                points:
-                  type: array
-                  items: { $ref: '#/components/schemas/GpsPoint' }
+                journeyId: { type: string, format: uuid }
+                latitude: { type: number }
+                longitude: { type: number }
+                accuracyMeters: { type: number, minimum: 0 }
+                speedKph: { type: number, minimum: 0 }
+                recordedAt: { type: string, format: date-time, description: Defaults to now if omitted }
       responses:
-        '202': { description: Accepted }
+        '201': { description: Created }
 
-  /vehicles/{id}/location:
+  /tracking/journeys/{id}/location:
     get:
       tags: [tracking]
-      x-status: planned
-      summary: Latest known location of a vehicle, with freshness classification
+      x-status: implemented
+      summary: >
+        Latest known location of the journey's vehicle, with freshness classification
+        (LIVE/STALE/OFFLINE against LOCATION_LIVE_WINDOW_SECONDS /
+        LOCATION_STALE_WINDOW_SECONDS). Authorization matches GET /journeys/{id} — a
+        parent only sees this for a journey carrying one of their children.
       security: [{ bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/IdParam'
@@ -481,7 +498,7 @@ paths:
   /emergency/sos:
     post:
       tags: [emergency]
-      x-status: planned
+      x-status: implemented
       summary: Trigger an SOS from the driver or child app
       security: [{ bearerAuth: [] }]
       requestBody:
@@ -489,19 +506,22 @@ paths:
           application/json:
             schema:
               type: object
-              required: [journeyId, latitude, longitude]
+              required: [journeyId]
               properties:
                 journeyId: { type: string, format: uuid }
                 latitude: { type: number }
                 longitude: { type: number }
                 note: { type: string }
       responses:
-        '201': { description: Incident created and escalation started }
+        '201':
+          description: >
+            Incident created, snapshotting every child currently ON_VEHICLE on the journey
+            and notifying operators + those children's parents.
 
   /notifications:
     get:
       tags: [notifications]
-      x-status: planned
+      x-status: implemented
       summary: Paginated notification feed for the current user
       security: [{ bearerAuth: [] }]
       parameters:
@@ -509,6 +529,42 @@ paths:
         - $ref: '#/components/parameters/PageSizeParam'
       responses:
         '200': { description: OK }
+
+  # The endpoints below are implemented but not detailed here with full request/response
+  # schemas — see the live Swagger UI at /api/docs for their exact shapes. Listed so this
+  # file doesn't read as an exhaustive contract when it no longer is one.
+  /routes:
+    post: { tags: [routes], x-status: implemented, summary: "Create a route, optionally with stops (SUPER_ADMIN, TRANSPORT_OPERATOR, SCHOOL_ADMIN — scoped to their own school)" }
+    get: { tags: [routes], x-status: implemented, summary: "List routes, paginated, scoped to a school admin's own school" }
+  /routes/{id}/assignments:
+    post: { tags: [routes], x-status: implemented, summary: "Assign a driver+vehicle to a route, closing any prior active assignment" }
+  /routes/{id}/children:
+    post: { tags: [routes], x-status: implemented, summary: "Enrol a child on a route at an optional pickup stop" }
+  /routes/{id}/children/{childId}:
+    delete: { tags: [routes], x-status: implemented, summary: "Unenrol a child from a route" }
+  /journeys:
+    post: { tags: [journeys], x-status: implemented, summary: "Schedule a journey for a route's currently-assigned driver/vehicle, seeding a ChildJourney per enrolled child" }
+    get: { tags: [journeys], x-status: implemented, summary: "List journeys, scoped by role (driver sees their own, parent sees journeys carrying their children, etc.)" }
+  /journeys/{id}/cancel:
+    post: { tags: [journeys], x-status: implemented, summary: "Driver cancels a journey that hasn't completed" }
+  /journeys/{id}/delay:
+    post: { tags: [journeys], x-status: implemented, summary: "Driver reports a delay with a reason, notifying parents on the journey" }
+  /journeys/{id}/children/{childId}/missed-pickup:
+    post: { tags: [journeys], x-status: implemented, summary: "Driver marks a not-yet-boarded child as a missed pickup" }
+  /emergency:
+    get: { tags: [emergency], x-status: implemented, summary: "List emergency incidents, scoped by role" }
+  /emergency/{id}:
+    get: { tags: [emergency], x-status: implemented, summary: "Get an incident with its timeline" }
+  /emergency/{id}/acknowledge:
+    post: { tags: [emergency], x-status: implemented, summary: "Operator acknowledges an incident (idempotent)" }
+  /emergency/{id}/resolve:
+    post: { tags: [emergency], x-status: implemented, summary: "Operator resolves an incident with an optional note (idempotent)" }
+  /drivers:
+    get: { tags: [drivers], x-status: implemented, summary: "List drivers (SUPER_ADMIN, TRANSPORT_OPERATOR, SCHOOL_ADMIN)" }
+  /vehicles:
+    get: { tags: [vehicles], x-status: implemented, summary: "List vehicles (SUPER_ADMIN, TRANSPORT_OPERATOR, SCHOOL_ADMIN)" }
+  /parents:
+    get: { tags: [parents], x-status: implemented, summary: "Find a parent by email (SUPER_ADMIN, TRANSPORT_OPERATOR, SCHOOL_ADMIN) — the only way to discover their internal id before enrolling a child" }
 
 components:
   securitySchemes:

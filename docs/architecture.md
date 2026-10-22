@@ -202,8 +202,8 @@ Network restored → flush queue in order → server dedupes by idempotency key
 | Cache / Pub-Sub | Redis 7 | Latest location, active-journey state, WS fan-out |
 | Real-time | Socket.IO (NestJS WebSocket Gateway) | Room-per-journey subscription model |
 | Web dashboard | React + TypeScript (Vite) | Operator/admin console |
-| Mobile (parent, driver, child) | React Native + TypeScript | Phases 4/6/7 |
-| Maps | Provider-abstracted (`MapProvider` interface) | Google Maps first; Mapbox swappable |
+| Parent, driver apps | React + TypeScript (Vite), responsive web | Built as web, not React Native — this sandbox has no mobile simulator to verify a native app against, and the API has no web-vs-native assumptions baked in, so a native shell is a later, backend-unchanged addition. See `docs/mvp-roadmap.md`. |
+| Maps | No provider wired yet | The parent live-trip view shows a freshness-coded position indicator driven by real GPS data, not a tile map. The `MapProvider` abstraction point below is still the intended seam for Google Maps/Mapbox/Leaflet. |
 | Infra | Docker, docker-compose (dev); IaC (Terraform) for cloud (later) | Cloud-portable (AWS/GCP/Azure) |
 | CI | GitHub Actions | Lint, typecheck, unit + e2e tests, build |
 
@@ -226,10 +226,19 @@ HomeSafe/ (this repo)
 │   │   │   ├── vehicles/         # Phase 2
 │   │   │   ├── transport-operators/ # Phase 2
 │   │   │   ├── school-admins/    # Phase 2
+│   │   │   ├── routes/           # Phase 3 — stops, driver/vehicle assignment, child enrolment
+│   │   │   ├── journeys/         # Phase 7 — lifecycle state machine, pickup/dropoff verification
+│   │   │   ├── tracking/         # Phase 5 — GPS ingestion, Redis latest-location, WS gateway
+│   │   │   ├── notifications/    # Phase 8 — event listeners, provider-swappable channel interface
+│   │   │   ├── emergency/        # Phase 10 — SOS trigger/acknowledge/resolve
 │   │   │   ├── audit/            # cross-cutting
-│   │   │   └── common/           # guards, filters, interceptors, decorators, config
+│   │   │   └── common/           # guards, filters, interceptors, decorators, config, redis
 │   │   └── test/
-│   └── admin-web/                 # Phase 9 (partial) — React + Vite, calls the real API
+│   ├── admin-web/                 # React + Vite — schools, staff, fleet, routes, live ops, SOS
+│   │   └── src/
+│   ├── driver-web/                 # React + Vite — today's routes, pickup/dropoff, GPS send loop, SOS
+│   │   └── src/
+│   └── parent-web/                 # React + Vite — children, live trip, notifications
 │       └── src/
 ├── docs/                         # this document + ERD, API spec, roadmap, security, testing
 ├── docker-compose.yml            # postgres + redis + api, for local dev
@@ -237,12 +246,6 @@ HomeSafe/ (this repo)
 ```
 
 `routes/`, `journeys/`, `tracking/`, `notifications/`, and `emergency/` (Phases 3/5/7/8/10)
-don't exist as code yet — only as schema (see `docs/domain-model-erd.md`) and as planned
-endpoints in `docs/api-spec.yaml` (`x-status: planned`). They'll be added as their own
-modules under `apps/api/src/` when those phases are built, following the same pattern as
-the modules above.
-
-Mobile apps (`apps/parent-mobile`, `apps/driver-mobile`, `apps/child-mobile`) and the admin
-web dashboard (`apps/admin-web`) are added as their own workspace packages starting Phase 4,
-once the API surface they depend on is stable — scaffolding them before there's an API to
-call would just be UI that has to be redone.
+are all built — see `docs/mvp-roadmap.md` for what each one actually does and, just as
+importantly, what it deliberately doesn't (no ETA engine, no real push/SMS/WhatsApp
+delivery, no map provider).
