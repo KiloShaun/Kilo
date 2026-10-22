@@ -1,0 +1,19 @@
+{
+  "name": "homesafe",
+  "private": true,
+  "version": "0.1.0",
+  "description": "HomeSafe — school transport safety and tracking platform",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "lint": "npm run lint --workspace apps/api",
+    "test": "npm run test --workspace apps/api",
+    "test:e2e": "npm run test:e2e --workspace apps/api",
+    "build": "npm run build --workspace apps/api",
+    "start:dev": "npm run start:dev --workspace apps/api"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

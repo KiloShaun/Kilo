@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: ['**']
+
+jobs:
+  api:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: homesafe
+          POSTGRES_PASSWORD: homesafe
+          POSTGRES_DB: homesafe
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U homesafe"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://homesafe:homesafe@localhost:5432/homesafe?schema=public
+      REDIS_URL: redis://localhost:6379
+      JWT_ACCESS_SECRET: ci-access-secret
+      JWT_REFRESH_SECRET: ci-refresh-secret
+      BCRYPT_SALT_ROUNDS: 4
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Generate Prisma client
+        run: npx prisma generate --schema apps/api/prisma/schema.prisma
+
+      - name: Lint
+        run: npm run lint --workspace apps/api
+
+      - name: Unit tests
+        run: npm run test --workspace apps/api
+
+      - name: Apply migrations
+        run: npx prisma migrate deploy --schema apps/api/prisma/schema.prisma
+
+      - name: e2e tests
+        run: npm run test:e2e --workspace apps/api
+
+      - name: Build
+        run: npm run build --workspace apps/api
+
+  web-apps:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        app: [admin-web, driver-web, parent-web]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Typecheck + build
+        run: npm run build --workspace apps/${{ matrix.app }}

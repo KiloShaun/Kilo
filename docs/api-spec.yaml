@@ -1,0 +1,867 @@
+openapi: 3.0.3
+info:
+  title: HomeSafe API
+  version: 0.1.0
+  description: >
+    School transport safety and tracking platform API. Every endpoint below is implemented
+    (see docs/mvp-roadmap.md for what remains unbuilt platform-wide, e.g. analytics). This
+    file curates the conceptually important endpoints with examples; it is not regenerated
+    from the server, so for an exhaustive, always-accurate list of every route, request and
+    response shape, see the live Swagger UI at /api/docs (or /api/docs-json) — it is
+    generated directly from the NestJS controllers and cannot drift from the real API the
+    way a hand-maintained spec can. Several routes/journeys/emergency endpoints added after
+    this file was first written are listed at the bottom without full request/response
+    detail for that reason, rather than duplicating (and risking disagreeing with) the
+    generated spec.
+servers:
+  - url: /api/v1
+tags:
+  - name: auth
+  - name: users
+  - name: schools
+  - name: parents
+  - name: children
+  - name: drivers
+  - name: transport-operators
+  - name: school-admins
+  - name: vehicles
+  - name: routes
+  - name: journeys
+  - name: tracking
+  - name: notifications
+  - name: emergency
+
+paths:
+  /auth/register:
+    post:
+      tags: [auth]
+      x-status: implemented
+      summary: Register a new parent account (self-service; other roles are admin-provisioned)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterRequest' }
+      responses:
+        '201':
+          description: Account created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthTokens' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+
+  /auth/login:
+    post:
+      tags: [auth]
+      x-status: implemented
+      summary: Login with email + password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: Authenticated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthTokens' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/refresh:
+    post:
+      tags: [auth]
+      x-status: implemented
+      summary: Exchange a refresh token for a new access/refresh token pair (rotates the refresh token)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
+      responses:
+        '200':
+          description: New token pair
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthTokens' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/bootstrap:
+    post:
+      tags: [auth]
+      x-status: implemented
+      summary: >-
+        Create the platform's first SUPER_ADMIN. Only succeeds once, on a completely empty
+        database (race-safe via a serializable transaction); permanently refuses afterwards.
+        There is no other way to create a SUPER_ADMIN.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BootstrapRequest' }
+      responses:
+        '201':
+          description: First SUPER_ADMIN created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthTokens' }
+        '409':
+          description: A user already exists — bootstrap is permanently disabled
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+
+  /auth/accept-invite:
+    post:
+      tags: [auth]
+      x-status: implemented
+      summary: >-
+        Set a real password on an admin-provisioned account (DRIVER, SCHOOL_ADMIN,
+        TRANSPORT_OPERATOR) using the one-time token from its creation response, and log in.
+        This is the only way such an account becomes usable.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AcceptInviteRequest' }
+      responses:
+        '200':
+          description: Password set; authenticated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthTokens' }
+        '401':
+          description: Invite token is invalid, already used, or expired
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+
+  /transport-operators:
+    post:
+      tags: [transport-operators]
+      x-status: implemented
+      summary: Provision a transport operator account (SUPER_ADMIN only)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateTransportOperatorRequest' }
+      responses:
+        '201':
+          description: Created — includes the one-time invite token
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InvitedAccountResponse' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /school-admins:
+    post:
+      tags: [school-admins]
+      x-status: implemented
+      summary: Provision a school admin account scoped to a school (SUPER_ADMIN, TRANSPORT_OPERATOR)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateSchoolAdminRequest' }
+      responses:
+        '201':
+          description: Created — includes the one-time invite token
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InvitedAccountResponse' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /users/me:
+    get:
+      tags: [users]
+      x-status: implemented
+      summary: Current authenticated user's profile
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+
+  /parents/me/children:
+    get:
+      tags: [parents]
+      x-status: implemented
+      summary: List the authenticated parent's own children (scoped; never another parent's)
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Child' }
+
+  /schools:
+    get:
+      tags: [schools]
+      x-status: implemented
+      summary: List schools (admin roles see all within their scope; scoped by operator/school for others)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+      responses:
+        '200': { $ref: '#/components/responses/PaginatedSchools' }
+    post:
+      tags: [schools]
+      x-status: implemented
+      summary: Create a school (SUPER_ADMIN, TRANSPORT_OPERATOR)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateSchoolRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/School' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /schools/{id}:
+    get:
+      tags: [schools]
+      x-status: implemented
+      summary: Get a school by id (scoped — school admins only see their own school)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/School' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /children:
+    post:
+      tags: [children]
+      x-status: implemented
+      summary: Create a child (SUPER_ADMIN, TRANSPORT_OPERATOR, SCHOOL_ADMIN)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateChildRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Child' }
+
+  /children/{id}:
+    get:
+      tags: [children]
+      x-status: implemented
+      summary: Get a child by id (scoped — a parent may only fetch their own child; returns 404, not 403, for out-of-scope ids to avoid confirming existence)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Child' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /drivers:
+    post:
+      tags: [drivers]
+      x-status: implemented
+      summary: Provision a driver account (SUPER_ADMIN, TRANSPORT_OPERATOR)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateDriverRequest' }
+      responses:
+        '201':
+          description: Created — includes the one-time invite token
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InvitedAccountResponse' }
+
+  /vehicles:
+    post:
+      tags: [vehicles]
+      x-status: implemented
+      summary: Register a vehicle (SUPER_ADMIN, TRANSPORT_OPERATOR)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateVehicleRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Vehicle' }
+
+  /vehicles/{id}:
+    get:
+      tags: [vehicles]
+      x-status: implemented
+      summary: Get a vehicle by id
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Vehicle' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /routes/{id}:
+    get:
+      tags: [routes]
+      x-status: implemented
+      summary: Get a route with its stops and assigned children/driver/vehicle
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Route' }
+
+  /journeys/{id}:
+    get:
+      tags: [journeys]
+      x-status: implemented
+      summary: Get a journey's current state, including per-child status
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Journey' }
+
+  /journeys/{id}/start:
+    post:
+      tags: [journeys]
+      x-status: implemented
+      summary: Driver starts a route (SCHEDULED -> DRIVER_STARTED)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200': { description: Journey started }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /journeys/{id}/end:
+    post:
+      tags: [journeys]
+      x-status: implemented
+      summary: Driver ends a route (-> COMPLETED)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200': { description: Journey completed }
+
+  /journeys/{id}/children/{childId}/pickup:
+    post:
+      tags: [journeys]
+      x-status: implemented
+      summary: Confirm a child's pickup (idempotent; verificationMethod required)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+        - name: childId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                verificationMethod:
+                  type: string
+                  enum: [NFC, QR, RFID, MANUAL]
+                latitude: { type: number }
+                longitude: { type: number }
+      responses:
+        '200': { description: Pickup recorded }
+        '409':
+          description: Already checked in
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+              example:
+                error:
+                  code: CHILD_ALREADY_CHECKED_IN
+                  message: The child has already been checked into this journey.
+                  correlationId: abc-123
+
+  /journeys/{id}/children/{childId}/dropoff:
+    post:
+      tags: [journeys]
+      x-status: implemented
+      summary: Confirm a child's drop-off
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+        - name: childId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Drop-off recorded }
+
+  /tracking/locations:
+    post:
+      tags: [tracking]
+      x-status: implemented
+      summary: >
+        Driver reports one GPS point for a journey they are assigned to. Persisted to
+        Postgres as a sampled trail and written to Redis as the latest point (which the
+        /tracking/journeys/{id}/location read below and the WebSocket gateway both serve
+        from). One point per call, not a batch — the driver app's send loop calls this on
+        an interval rather than batching client-side.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [journeyId, latitude, longitude]
+              properties:
+                journeyId: { type: string, format: uuid }
+                latitude: { type: number }
+                longitude: { type: number }
+                accuracyMeters: { type: number, minimum: 0 }
+                speedKph: { type: number, minimum: 0 }
+                recordedAt: { type: string, format: date-time, description: Defaults to now if omitted }
+      responses:
+        '201': { description: Created }
+
+  /tracking/journeys/{id}/location:
+    get:
+      tags: [tracking]
+      x-status: implemented
+      summary: >
+        Latest known location of the journey's vehicle, with freshness classification
+        (LIVE/STALE/OFFLINE against LOCATION_LIVE_WINDOW_SECONDS /
+        LOCATION_STALE_WINDOW_SECONDS). Authorization matches GET /journeys/{id} — a
+        parent only sees this for a journey carrying one of their children.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/GpsPoint' }
+                  - type: object
+                    properties:
+                      freshness:
+                        type: string
+                        enum: [LIVE, STALE, OFFLINE]
+
+  /emergency/sos:
+    post:
+      tags: [emergency]
+      x-status: implemented
+      summary: Trigger an SOS from the driver or child app
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [journeyId]
+              properties:
+                journeyId: { type: string, format: uuid }
+                latitude: { type: number }
+                longitude: { type: number }
+                note: { type: string }
+      responses:
+        '201':
+          description: >
+            Incident created, snapshotting every child currently ON_VEHICLE on the journey
+            and notifying operators + those children's parents.
+
+  /notifications:
+    get:
+      tags: [notifications]
+      x-status: implemented
+      summary: Paginated notification feed for the current user
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+      responses:
+        '200': { description: OK }
+
+  # The endpoints below are implemented but not detailed here with full request/response
+  # schemas — see the live Swagger UI at /api/docs for their exact shapes. Listed so this
+  # file doesn't read as an exhaustive contract when it no longer is one.
+  /routes:
+    post: { tags: [routes], x-status: implemented, summary: "Create a route, optionally with stops (SUPER_ADMIN, TRANSPORT_OPERATOR, SCHOOL_ADMIN — scoped to their own school)" }
+    get: { tags: [routes], x-status: implemented, summary: "List routes, paginated, scoped to a school admin's own school" }
+  /routes/{id}/assignments:
+    post: { tags: [routes], x-status: implemented, summary: "Assign a driver+vehicle to a route, closing any prior active assignment" }
+  /routes/{id}/children:
+    post: { tags: [routes], x-status: implemented, summary: "Enrol a child on a route at an optional pickup stop" }
+  /routes/{id}/children/{childId}:
+    delete: { tags: [routes], x-status: implemented, summary: "Unenrol a child from a route" }
+  /journeys:
+    post: { tags: [journeys], x-status: implemented, summary: "Schedule a journey for a route's currently-assigned driver/vehicle, seeding a ChildJourney per enrolled child" }
+    get: { tags: [journeys], x-status: implemented, summary: "List journeys, scoped by role (driver sees their own, parent sees journeys carrying their children, etc.)" }
+  /journeys/{id}/cancel:
+    post: { tags: [journeys], x-status: implemented, summary: "Driver cancels a journey that hasn't completed" }
+  /journeys/{id}/delay:
+    post: { tags: [journeys], x-status: implemented, summary: "Driver reports a delay with a reason, notifying parents on the journey" }
+  /journeys/{id}/children/{childId}/missed-pickup:
+    post: { tags: [journeys], x-status: implemented, summary: "Driver marks a not-yet-boarded child as a missed pickup" }
+  /emergency:
+    get: { tags: [emergency], x-status: implemented, summary: "List emergency incidents, scoped by role" }
+  /emergency/{id}:
+    get: { tags: [emergency], x-status: implemented, summary: "Get an incident with its timeline" }
+  /emergency/{id}/acknowledge:
+    post: { tags: [emergency], x-status: implemented, summary: "Operator acknowledges an incident (idempotent)" }
+  /emergency/{id}/resolve:
+    post: { tags: [emergency], x-status: implemented, summary: "Operator resolves an incident with an optional note (idempotent)" }
+  /drivers:
+    get: { tags: [drivers], x-status: implemented, summary: "List drivers (SUPER_ADMIN, TRANSPORT_OPERATOR, SCHOOL_ADMIN)" }
+  /vehicles:
+    get: { tags: [vehicles], x-status: implemented, summary: "List vehicles (SUPER_ADMIN, TRANSPORT_OPERATOR, SCHOOL_ADMIN)" }
+  /parents:
+    get: { tags: [parents], x-status: implemented, summary: "Find a parent by email (SUPER_ADMIN, TRANSPORT_OPERATOR, SCHOOL_ADMIN) — the only way to discover their internal id before enrolling a child" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    IdParam:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    PageParam:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    PageSizeParam:
+      name: pageSize
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+
+  responses:
+    ValidationError:
+      description: Validation failed
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Forbidden:
+      description: Authenticated but not permitted
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    NotFound:
+      description: Not found (or not visible to this user's scope)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Conflict:
+      description: Conflicting state
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    PaginatedSchools:
+      description: OK
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data:
+                type: array
+                items: { $ref: '#/components/schemas/School' }
+              page: { type: integer }
+              pageSize: { type: integer }
+              total: { type: integer }
+
+  schemas:
+    ErrorEnvelope:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string, example: CHILD_ALREADY_CHECKED_IN }
+            message: { type: string }
+            correlationId: { type: string }
+
+    RegisterRequest:
+      type: object
+      required: [email, password, firstName, lastName]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 10 }
+        firstName: { type: string }
+        lastName: { type: string }
+        phoneNumber: { type: string }
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string }
+
+    BootstrapRequest:
+      type: object
+      required: [email, password, firstName, lastName]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 10 }
+        firstName: { type: string }
+        lastName: { type: string }
+        phoneNumber: { type: string }
+
+    AcceptInviteRequest:
+      type: object
+      required: [token, password]
+      properties:
+        token: { type: string, description: The one-time token from the invite/create response }
+        password: { type: string, minLength: 10 }
+
+    CreateTransportOperatorRequest:
+      type: object
+      required: [email, firstName, lastName]
+      properties:
+        email: { type: string, format: email }
+        firstName: { type: string }
+        lastName: { type: string }
+        phoneNumber: { type: string }
+
+    CreateSchoolAdminRequest:
+      type: object
+      required: [email, firstName, lastName, schoolId]
+      properties:
+        email: { type: string, format: email }
+        firstName: { type: string }
+        lastName: { type: string }
+        schoolId: { type: string, format: uuid }
+        phoneNumber: { type: string }
+
+    InvitedAccountResponse:
+      type: object
+      description: >-
+        Response for every admin-provisioned account (drivers, school admins, transport
+        operators). The account cannot log in until `inviteToken` is redeemed via
+        POST /auth/accept-invite.
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        firstName: { type: string }
+        lastName: { type: string }
+        role:
+          type: string
+          enum: [DRIVER, SCHOOL_ADMIN, TRANSPORT_OPERATOR]
+        schoolId: { type: string, format: uuid, description: Present for SCHOOL_ADMIN only }
+        licenseNumber: { type: string, description: Present for DRIVER only }
+        inviteToken:
+          type: string
+          description: >-
+            One-time plaintext token, shown only in this response. The admin relays it to the
+            invitee out of band until a real email/SMS provider is wired up.
+
+    AuthTokens:
+      type: object
+      properties:
+        accessToken: { type: string }
+        refreshToken: { type: string }
+        expiresIn: { type: integer, description: seconds until access token expiry }
+        user: { $ref: '#/components/schemas/User' }
+
+    User:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        role:
+          type: string
+          enum: [SUPER_ADMIN, TRANSPORT_OPERATOR, SCHOOL_ADMIN, DRIVER, PARENT, CHILD]
+        firstName: { type: string }
+        lastName: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    School:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        address: { type: string }
+        contactPhone: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    CreateSchoolRequest:
+      type: object
+      required: [name, address]
+      properties:
+        name: { type: string }
+        address: { type: string }
+        contactPhone: { type: string }
+
+    Child:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        firstName: { type: string }
+        lastName: { type: string }
+        schoolId: { type: string, format: uuid }
+        parentId: { type: string, format: uuid }
+        dateOfBirth: { type: string, format: date }
+        idMethod:
+          type: string
+          enum: [QR, NFC, RFID, SCHOOL_ID, NONE]
+
+    CreateChildRequest:
+      type: object
+      required: [firstName, lastName, parentId, schoolId]
+      properties:
+        firstName: { type: string }
+        lastName: { type: string }
+        dateOfBirth: { type: string, format: date }
+        parentId: { type: string, format: uuid }
+        schoolId: { type: string, format: uuid }
+        idMethod:
+          type: string
+          enum: [QR, NFC, RFID, SCHOOL_ID, NONE]
+        idTagValue: { type: string }
+
+    Driver:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        licenseNumber: { type: string }
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE, SUSPENDED]
+
+    CreateDriverRequest:
+      type: object
+      required: [email, firstName, lastName, licenseNumber]
+      properties:
+        email: { type: string, format: email }
+        firstName: { type: string }
+        lastName: { type: string }
+        licenseNumber: { type: string }
+        phoneNumber: { type: string }
+
+    Vehicle:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        registrationNumber: { type: string }
+        make: { type: string }
+        model: { type: string }
+        capacity: { type: integer }
+        vehicleType:
+          type: string
+          enum: [MINIBUS, SEDAN, BUS, VAN]
+
+    CreateVehicleRequest:
+      type: object
+      required: [registrationNumber, capacity, vehicleType]
+      properties:
+        registrationNumber: { type: string }
+        make: { type: string }
+        model: { type: string }
+        capacity: { type: integer }
+        vehicleType:
+          type: string
+          enum: [MINIBUS, SEDAN, BUS, VAN]
+
+    Route:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        schoolId: { type: string, format: uuid }
+        stops:
+          type: array
+          items: { $ref: '#/components/schemas/RouteStop' }
+
+    RouteStop:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        sequence: { type: integer }
+        name: { type: string }
+        latitude: { type: number }
+        longitude: { type: number }
+        scheduledPickupTime: { type: string }
+        scheduledDropoffTime: { type: string }
+
+    Journey:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        routeId: { type: string, format: uuid }
+        vehicleId: { type: string, format: uuid }
+        driverId: { type: string, format: uuid }
+        direction: { type: string, enum: [TO_SCHOOL, FROM_SCHOOL] }
+        status:
+          type: string
+          enum: [SCHEDULED, DRIVER_STARTED, EN_ROUTE, PICKUP, CHILD_ONBOARD, SCHOOL_ARRIVAL, SCHOOL_DROPOFF, RETURN_ROUTE, CHILD_DROPPED_OFF, COMPLETED, CANCELLED]
+        scheduledDate: { type: string, format: date }
+
+    GpsPoint:
+      type: object
+      required: [latitude, longitude, recordedAt]
+      properties:
+        latitude: { type: number }
+        longitude: { type: number }
+        accuracyMeters: { type: number }
+        recordedAt: { type: string, format: date-time }
+        eventId: { type: string, format: uuid, description: client-generated idempotency key }

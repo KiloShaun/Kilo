@@ -1,0 +1,504 @@
+// HomeSafe — data model
+// See docs/domain-model-erd.md for the rationale behind relationships and indexes.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Enums ────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  SUPER_ADMIN
+  TRANSPORT_OPERATOR
+  SCHOOL_ADMIN
+  DRIVER
+  PARENT
+  CHILD
+}
+
+enum DriverStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum VehicleType {
+  MINIBUS
+  SEDAN
+  BUS
+  VAN
+}
+
+enum ChildIdMethod {
+  QR
+  NFC
+  RFID
+  SCHOOL_ID
+  NONE
+}
+
+enum JourneyDirection {
+  TO_SCHOOL
+  FROM_SCHOOL
+}
+
+enum JourneyStatus {
+  SCHEDULED
+  DRIVER_STARTED
+  EN_ROUTE
+  PICKUP
+  CHILD_ONBOARD
+  SCHOOL_ARRIVAL
+  SCHOOL_DROPOFF
+  RETURN_ROUTE
+  CHILD_DROPPED_OFF
+  COMPLETED
+  CANCELLED
+}
+
+enum ChildJourneyStatus {
+  NOT_YET_BOARDED
+  PICKED_UP
+  ON_VEHICLE
+  ARRIVED_AT_SCHOOL
+  DROPPED_OFF
+  MISSED_PICKUP
+}
+
+enum JourneyEventType {
+  DRIVER_STARTED_ROUTE
+  VEHICLE_APPROACHING
+  CHILD_PICKED_UP
+  CHILD_MISSED_PICKUP
+  VEHICLE_DELAYED
+  CHILD_ARRIVED_AT_SCHOOL
+  CHILD_DROPPED_OFF
+  SOS_TRIGGERED
+  ROUTE_COMPLETED
+  INCIDENT_REPORTED
+  // Emergency-incident timeline steps (scoped by incidentId instead of journeyId)
+  LOCATION_CAPTURED
+  OPERATOR_NOTIFIED
+  PARENTS_NOTIFIED
+  OPERATOR_ACKNOWLEDGED
+  INCIDENT_RESOLVED
+}
+
+enum RecordedBy {
+  DRIVER
+  PARENT
+  SYSTEM
+  ADMIN
+}
+
+enum VerificationMethod {
+  NFC
+  QR
+  RFID
+  MANUAL
+}
+
+enum NotificationChannel {
+  PUSH
+  SMS
+  WHATSAPP
+  EMAIL
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  DELIVERED
+  FAILED
+}
+
+enum EmergencyStatus {
+  TRIGGERED
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+// ── Core identity ───────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  passwordHash  String
+  role          UserRole
+  firstName     String
+  lastName      String
+  phoneNumber   String?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  parent        Parent?
+  driver        Driver?
+  schoolAdminOf School?   @relation("SchoolAdmins", fields: [schoolAdminSchoolId], references: [id])
+  schoolAdminSchoolId String?
+
+  sessions      Session[]
+  auditLogs     AuditLog[]
+  notifications Notification[]
+  accountInvite AccountInvite?
+
+  @@index([role])
+  @@map("users")
+}
+
+// Admin-provisioned accounts (DRIVER, SCHOOL_ADMIN, TRANSPORT_OPERATOR) are created with an
+// unusable placeholder password and must set a real one via this one-time token before they
+// can log in — see AccountsService.createInvitedAccount and AuthService.acceptInvite.
+model AccountInvite {
+  id        String    @id @default(uuid())
+  userId    String    @unique
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@map("account_invites")
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceId     String
+  refreshTokenHash String
+  userAgent    String?
+  ipAddress    String?
+  lastSeenAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
+  revokedAt    DateTime?
+
+  @@unique([userId, deviceId])
+  @@map("sessions")
+}
+
+// ── Schools & transport operators ──────────────────────────────────────
+
+model School {
+  id           String    @id @default(uuid())
+  name         String
+  address      String
+  contactPhone String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  admins    User[]    @relation("SchoolAdmins")
+  children  Child[]
+  routes    Route[]
+
+  @@map("schools")
+}
+
+// ── People ──────────────────────────────────────────────────────────────
+
+model Parent {
+  id        String    @id @default(uuid())
+  userId    String    @unique
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  children  Child[]
+
+  @@map("parents")
+}
+
+model Child {
+  id            String        @id @default(uuid())
+  firstName     String
+  lastName      String
+  dateOfBirth   DateTime?
+  parentId      String
+  parent        Parent        @relation(fields: [parentId], references: [id])
+  schoolId      String
+  school        School        @relation(fields: [schoolId], references: [id])
+  idMethod      ChildIdMethod @default(NONE)
+  idTagValue    String?       // QR/NFC/RFID tag payload, opaque to the app
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  deletedAt     DateTime?
+
+  routeAssignments ChildRouteAssignment[]
+  childJourneys    ChildJourney[]
+  journeyEvents    JourneyEvent[]
+
+  @@index([parentId])
+  @@index([schoolId])
+  @@map("children")
+}
+
+model Driver {
+  id            String       @id @default(uuid())
+  userId        String       @unique
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  licenseNumber String       @unique
+  status        DriverStatus @default(ACTIVE)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  deletedAt     DateTime?
+
+  vehicles  Vehicle[]
+  routes    RouteAssignment[]
+  journeys  Journey[]
+
+  @@map("drivers")
+}
+
+// ── Fleet ───────────────────────────────────────────────────────────────
+
+model Vehicle {
+  id                 String      @id @default(uuid())
+  registrationNumber String      @unique
+  make               String?
+  model              String?
+  capacity           Int
+  vehicleType        VehicleType
+  currentDriverId    String?
+  currentDriver      Driver?     @relation(fields: [currentDriverId], references: [id])
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+  deletedAt          DateTime?
+
+  routes        RouteAssignment[]
+  journeys      Journey[]
+  gpsLocations  GPSLocation[]
+
+  @@map("vehicles")
+}
+
+// ── Routes ──────────────────────────────────────────────────────────────
+
+model Route {
+  id        String    @id @default(uuid())
+  name      String
+  schoolId  String
+  school    School    @relation(fields: [schoolId], references: [id])
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  stops             RouteStop[]
+  assignments       RouteAssignment[]
+  childAssignments  ChildRouteAssignment[]
+  journeys          Journey[]
+
+  @@index([schoolId])
+  @@map("routes")
+}
+
+model RouteStop {
+  id                   String   @id @default(uuid())
+  routeId              String
+  route                Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  sequence             Int
+  name                 String
+  latitude             Float
+  longitude            Float
+  scheduledPickupTime  String?  // "HH:mm", local to the route's timezone
+  scheduledDropoffTime String?
+
+  childAssignments ChildRouteAssignment[]
+
+  @@unique([routeId, sequence])
+  @@map("route_stops")
+}
+
+// current driver/vehicle assignment to a route (distinct from a specific day's Journey)
+model RouteAssignment {
+  id        String   @id @default(uuid())
+  routeId   String
+  route     Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  driverId  String
+  driver    Driver   @relation(fields: [driverId], references: [id])
+  vehicleId String
+  vehicle   Vehicle  @relation(fields: [vehicleId], references: [id])
+  effectiveFrom DateTime @default(now())
+  effectiveTo   DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([routeId])
+  @@map("route_assignments")
+}
+
+model ChildRouteAssignment {
+  id             String     @id @default(uuid())
+  childId        String
+  child          Child      @relation(fields: [childId], references: [id])
+  routeId        String
+  route          Route      @relation(fields: [routeId], references: [id])
+  pickupStopId   String?
+  pickupStop     RouteStop? @relation(fields: [pickupStopId], references: [id])
+  createdAt      DateTime   @default(now())
+  deletedAt      DateTime?
+
+  @@unique([childId, routeId])
+  @@map("child_route_assignments")
+}
+
+// ── Journeys ────────────────────────────────────────────────────────────
+
+model Journey {
+  id            String           @id @default(uuid())
+  routeId       String
+  route         Route            @relation(fields: [routeId], references: [id])
+  vehicleId     String
+  vehicle       Vehicle          @relation(fields: [vehicleId], references: [id])
+  driverId      String
+  driver        Driver           @relation(fields: [driverId], references: [id])
+  direction     JourneyDirection
+  status        JourneyStatus    @default(SCHEDULED)
+  scheduledDate DateTime         @db.Date
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  events         JourneyEvent[]
+  childJourneys  ChildJourney[]
+  gpsLocations   GPSLocation[]
+  emergencyIncidents EmergencyIncident[]
+
+  @@index([routeId, scheduledDate])
+  @@index([driverId, status])
+  @@map("journeys")
+}
+
+// current-state projection of a child within a journey (kept in sync with JourneyEvent writes)
+model ChildJourney {
+  id                    String             @id @default(uuid())
+  journeyId             String
+  journey               Journey            @relation(fields: [journeyId], references: [id])
+  childId               String
+  child                 Child              @relation(fields: [childId], references: [id])
+  status                ChildJourneyStatus @default(NOT_YET_BOARDED)
+  scheduledPickupTime   DateTime?
+  actualPickupTime      DateTime?
+  scheduledDropoffTime  DateTime?
+  actualDropoffTime     DateTime?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  @@unique([journeyId, childId])
+  @@index([childId])
+  @@map("child_journeys")
+}
+
+// immutable, append-only audit trail of everything that happened on a journey (or incident)
+model JourneyEvent {
+  id                 String             @id @default(uuid())
+  journeyId          String?
+  journey            Journey?           @relation(fields: [journeyId], references: [id])
+  incidentId         String?
+  incident           EmergencyIncident? @relation(fields: [incidentId], references: [id])
+  childId            String?
+  child              Child?             @relation(fields: [childId], references: [id])
+  eventType          JourneyEventType
+  occurredAt         DateTime           @default(now())
+  latitude           Float?
+  longitude          Float?
+  recordedBy         RecordedBy
+  recordedByUserId   String?
+  verificationMethod VerificationMethod?
+  metadata           Json?
+
+  @@index([journeyId, occurredAt])
+  @@index([childId, occurredAt])
+  @@index([incidentId, occurredAt])
+  @@map("journey_events")
+}
+
+// sampled GPS trail; Redis holds the authoritative "latest point" for live tracking
+model GPSLocation {
+  id             String   @id @default(uuid())
+  vehicleId      String
+  vehicle        Vehicle  @relation(fields: [vehicleId], references: [id])
+  journeyId      String?
+  journey        Journey? @relation(fields: [journeyId], references: [id])
+  latitude       Float
+  longitude      Float
+  accuracyMeters Float?
+  speedKph       Float?
+  recordedAt     DateTime
+  createdAt      DateTime @default(now())
+
+  @@index([vehicleId, recordedAt(sort: Desc)])
+  @@index([journeyId, recordedAt])
+  @@map("gps_locations")
+}
+
+// ── Notifications ───────────────────────────────────────────────────────
+
+model Notification {
+  id             String              @id @default(uuid())
+  recipientUserId String
+  recipient      User                @relation(fields: [recipientUserId], references: [id])
+  channel        NotificationChannel
+  status         NotificationStatus  @default(PENDING)
+  eventType      String
+  title          String
+  body           String
+  metadata       Json?
+  sentAt         DateTime?
+  deliveredAt    DateTime?
+  failureReason  String?
+  createdAt      DateTime            @default(now())
+
+  @@index([recipientUserId, createdAt(sort: Desc)])
+  @@map("notifications")
+}
+
+// ── Emergency ───────────────────────────────────────────────────────────
+
+model EmergencyIncident {
+  id                String          @id @default(uuid())
+  journeyId         String?
+  journey           Journey?        @relation(fields: [journeyId], references: [id])
+  vehicleId         String?
+  driverId          String?
+  affectedChildIds  Json            // snapshot at trigger time, not a live join — see docs/domain-model-erd.md
+  latitude          Float?
+  longitude         Float?
+  status            EmergencyStatus @default(TRIGGERED)
+  note              String?
+  triggeredAt       DateTime        @default(now())
+  acknowledgedAt    DateTime?
+  resolvedAt        DateTime?
+
+  timeline JourneyEvent[]
+
+  @@index([status])
+  @@map("emergency_incidents")
+}
+
+// ── Audit ───────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  actorUserId  String?
+  actor        User?    @relation(fields: [actorUserId], references: [id])
+  action       String
+  resourceType String
+  resourceId   String?
+  before       Json?
+  after        Json?
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+
+  @@index([actorUserId, createdAt(sort: Desc)])
+  @@index([resourceType, resourceId])
+  @@map("audit_logs")
+}
