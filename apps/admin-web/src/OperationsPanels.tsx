@@ -114,18 +114,10 @@ export function FleetPanel({ token }: { token: string }) {
   );
 }
 
-export function RoutesPanel({
-  token,
-  schools,
-  drivers,
-  vehicles,
-}: {
-  token: string;
-  schools: School[];
-  drivers: Driver[];
-  vehicles: Vehicle[];
-}) {
+export function RoutesPanel({ token, schools }: { token: string; schools: School[] }) {
   const [routes, setRoutes] = useState<Route[]>([]);
+  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [error, setError] = useState<unknown>(null);
   const [name, setName] = useState('');
   const [schoolId, setSchoolId] = useState('');
@@ -141,8 +133,14 @@ export function RoutesPanel({
 
   async function refresh() {
     try {
-      const result = await api.listRoutes(token);
-      setRoutes(result.data);
+      const [routesResult, driversResult, vehiclesResult] = await Promise.all([
+        api.listRoutes(token),
+        api.listDrivers(token),
+        api.listVehicles(token),
+      ]);
+      setRoutes(routesResult.data);
+      setDrivers(driversResult.data);
+      setVehicles(vehiclesResult.data);
     } catch (err) {
       setError(err);
     }
@@ -200,7 +198,12 @@ export function RoutesPanel({
 
   return (
     <section className="panel">
-      <h2>Routes</h2>
+      <div className="panel-header">
+        <h2>Routes</h2>
+        <button type="button" className="refresh-button" onClick={refresh}>
+          ↻ Refresh
+        </button>
+      </div>
       <ErrorText error={error} />
       {routes.length === 0 ? (
         <p className="hint">No routes yet.</p>
@@ -319,8 +322,9 @@ export function RoutesPanel({
   );
 }
 
-export function JourneysPanel({ token, routes, user }: { token: string; routes: Route[]; user: AuthenticatedUser }) {
+export function JourneysPanel({ token, user }: { token: string; user: AuthenticatedUser }) {
   const [journeys, setJourneys] = useState<Journey[]>([]);
+  const [routes, setRoutes] = useState<Route[]>([]);
   const [error, setError] = useState<unknown>(null);
   const [routeId, setRouteId] = useState('');
   const [direction, setDirection] = useState<'TO_SCHOOL' | 'FROM_SCHOOL'>('TO_SCHOOL');
@@ -331,8 +335,9 @@ export function JourneysPanel({ token, routes, user }: { token: string; routes: 
 
   async function refresh() {
     try {
-      const result = await api.listJourneys(token);
-      setJourneys(result.data);
+      const [journeysResult, routesResult] = await Promise.all([api.listJourneys(token), api.listRoutes(token)]);
+      setJourneys(journeysResult.data);
+      setRoutes(routesResult.data);
     } catch (err) {
       setError(err);
     }
@@ -368,7 +373,12 @@ export function JourneysPanel({ token, routes, user }: { token: string; routes: 
 
   return (
     <section className="panel">
-      <h2>Journeys (live ops)</h2>
+      <div className="panel-header">
+        <h2>Journeys (live ops)</h2>
+        <button type="button" className="refresh-button" onClick={refresh}>
+          ↻ Refresh
+        </button>
+      </div>
       <ErrorText error={error} />
       {journeys.length === 0 ? (
         <p className="hint">No journeys yet.</p>
@@ -484,16 +494,21 @@ export function NotificationsPanel({ token }: { token: string }) {
   );
 }
 
-export function EmergencyPanel({ token, journeys }: { token: string; journeys: Journey[] }) {
+export function EmergencyPanel({ token }: { token: string }) {
   const [incidents, setIncidents] = useState<EmergencyIncident[]>([]);
+  const [journeys, setJourneys] = useState<Journey[]>([]);
   const [error, setError] = useState<unknown>(null);
   const [journeyId, setJourneyId] = useState('');
   const [note, setNote] = useState('');
 
   async function refresh() {
     try {
-      const result = await api.listIncidents(token);
-      setIncidents(result.data);
+      const [incidentsResult, journeysResult] = await Promise.all([
+        api.listIncidents(token),
+        api.listJourneys(token),
+      ]);
+      setIncidents(incidentsResult.data);
+      setJourneys(journeysResult.data);
     } catch (err) {
       setError(err);
     }
@@ -536,7 +551,12 @@ export function EmergencyPanel({ token, journeys }: { token: string; journeys: J
 
   return (
     <section className="panel">
-      <h2>Emergency / SOS</h2>
+      <div className="panel-header">
+        <h2>Emergency / SOS</h2>
+        <button type="button" className="refresh-button" onClick={refresh}>
+          ↻ Refresh
+        </button>
+      </div>
       <ErrorText error={error} />
       {incidents.length === 0 ? (
         <p className="hint">No incidents — all clear.</p>

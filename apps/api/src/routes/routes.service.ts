@@ -57,7 +57,11 @@ export class RoutesService {
         orderBy: { name: 'asc' },
         include: {
           stops: { orderBy: { sequence: 'asc' } },
-          assignments: { where: { effectiveTo: null }, include: { driver: true, vehicle: true } },
+          assignments: {
+            where: { effectiveTo: null },
+            include: { driver: { include: { user: true } }, vehicle: true },
+          },
+          childAssignments: { where: { deletedAt: null } },
         },
       }),
       this.prisma.route.count({ where }),

@@ -74,7 +74,8 @@ export default function JourneyScreen({ token, user, onLogout }: Props) {
               journeyId: selected.id,
               latitude: position.coords.latitude,
               longitude: position.coords.longitude,
-              speedKph: position.coords.speed ? position.coords.speed * 3.6 : undefined,
+              speedKph:
+                typeof position.coords.speed === 'number' ? position.coords.speed * 3.6 : undefined,
               accuracyMeters: position.coords.accuracy ?? undefined,
             });
             setGpsStatus('idle');

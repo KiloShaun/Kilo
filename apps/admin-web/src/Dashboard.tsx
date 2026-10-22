@@ -1,16 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
-import {
-  api,
-  ApiError,
-  AuthenticatedUser,
-  Child,
-  Driver,
-  InvitedAccountResult,
-  Journey,
-  Route,
-  School,
-  Vehicle,
-} from './api';
+import { api, ApiError, AuthenticatedUser, Child, InvitedAccountResult, School } from './api';
 import { EmergencyPanel, FleetPanel, JourneysPanel, NotificationsPanel, RoutesPanel } from './OperationsPanels';
 
 interface Props {
@@ -367,10 +356,6 @@ function ChildrenPanel({ token, schools }: { token: string; schools: School[] })
 
 export default function Dashboard({ token, user, onLogout }: Props) {
   const [schools, setSchools] = useState<School[]>([]);
-  const [drivers, setDrivers] = useState<Driver[]>([]);
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [routes, setRoutes] = useState<Route[]>([]);
-  const [journeys, setJourneys] = useState<Journey[]>([]);
 
   const canManage = user.role === 'SUPER_ADMIN' || user.role === 'TRANSPORT_OPERATOR';
   const canManageRoutes = canManage || user.role === 'SCHOOL_ADMIN';
@@ -380,27 +365,6 @@ export default function Dashboard({ token, user, onLogout }: Props) {
       .listSchools(token)
       .then((result) => setSchools(result.data))
       .catch(() => undefined);
-    if (canManage) {
-      api
-        .listDrivers(token)
-        .then((result) => setDrivers(result.data))
-        .catch(() => undefined);
-      api
-        .listVehicles(token)
-        .then((result) => setVehicles(result.data))
-        .catch(() => undefined);
-    }
-    if (canManageRoutes) {
-      api
-        .listRoutes(token)
-        .then((result) => setRoutes(result.data))
-        .catch(() => undefined);
-      api
-        .listJourneys(token)
-        .then((result) => setJourneys(result.data))
-        .catch(() => undefined);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   return (
@@ -423,11 +387,11 @@ export default function Dashboard({ token, user, onLogout }: Props) {
 
       {canManage && <FleetPanel token={token} />}
 
-      {canManageRoutes && <RoutesPanel token={token} schools={schools} drivers={drivers} vehicles={vehicles} />}
+      {canManageRoutes && <RoutesPanel token={token} schools={schools} />}
 
-      {canManageRoutes && <JourneysPanel token={token} routes={routes} user={user} />}
+      {canManageRoutes && <JourneysPanel token={token} user={user} />}
 
-      {canManage && <EmergencyPanel token={token} journeys={journeys} />}
+      {canManage && <EmergencyPanel token={token} />}
 
       <NotificationsPanel token={token} />
     </div>

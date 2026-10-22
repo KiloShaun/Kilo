@@ -275,6 +275,14 @@ describe('Full platform lifecycle (e2e)', () => {
     expect(location.body.location.latitude).toBeCloseTo(-26.2041, 3);
   });
 
+  it('accepts a stationary/high-precision GPS reading (accuracy or speed of exactly 0)', async () => {
+    await http()
+      .post('/tracking/locations')
+      .set('Authorization', `Bearer ${driverToken}`)
+      .send({ journeyId, latitude: -26.2041, longitude: 28.0473, accuracyMeters: 0, speedKph: 0 })
+      .expect(201);
+  });
+
   it('refuses a parent with no child on this journey from reading its location', async () => {
     const strangerRegister = await http()
       .post('/auth/register')
