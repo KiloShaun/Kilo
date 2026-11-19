@@ -340,7 +340,7 @@ td {
 
 .stat-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: 12px;
   margin-bottom: 20px;
 }
@@ -357,7 +357,7 @@ td {
 }
 
 .stat-value {
-  font-size: 26px;
+  font-size: 24px;
   font-weight: 700;
   margin: 2px 0;
   font-variant-numeric: tabular-nums;
