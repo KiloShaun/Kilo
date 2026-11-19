@@ -9,7 +9,7 @@ import { PrismaService } from '../src/common/prisma/prisma.service';
  * assignments (Phase 3), GPS ingestion and live-location freshness (Phase 5), the journey
  * state machine and child pickup/dropoff verification (Phase 7), in-app notifications fanned
  * out from those domain events (Phase 8), and an emergency/SOS incident raised mid-journey
- * (Phase 10).
+ * (Phase 10), and the analytics report built from all of it (Phase 11).
  *
  * Wipes every table itself (see staff-provisioning.e2e-spec.ts for why) and runs with
  * maxWorkers: 1, so it never races that file over the same database.
@@ -405,5 +405,77 @@ describe('Full platform lifecycle (e2e)', () => {
         'ROUTE_COMPLETED',
       ]),
     );
+  });
+
+  it('reports the finished run in analytics, scoped by school, and refuses non-staff roles', async () => {
+    const today = new Date().toISOString().slice(0, 10);
+
+    const summary = await http()
+      .get(`/analytics/summary?from=${today}&to=${today}`)
+      .set('Authorization', `Bearer ${superAdminToken}`)
+      .expect(200);
+    expect(summary.body.period).toEqual({ from: today, to: today, days: 1 });
+    expect(summary.body.journeys).toMatchObject({
+      total: 1,
+      completed: 1,
+      cancelled: 0,
+      completionRate: 100,
+      byDirection: { TO_SCHOOL: 1, FROM_SCHOOL: 0 },
+    });
+    expect(summary.body.journeys.avgDurationMinutes).toEqual(expect.any(Number));
+    expect(summary.body.children).toMatchObject({
+      total: 1,
+      pickedUp: 1,
+      droppedOff: 1,
+      missedPickups: 0,
+      notRecorded: 0,
+      missedPickupRate: 0,
+    });
+    expect(summary.body.emergencies).toMatchObject({
+      total: 1,
+      byStatus: { TRIGGERED: 0, ACKNOWLEDGED: 0, RESOLVED: 1 },
+    });
+    expect(summary.body.emergencies.avgMinutesToResolve).toEqual(expect.any(Number));
+    expect(summary.body.routes).toEqual([
+      expect.objectContaining({ routeId, schoolId, journeys: 1, completed: 1 }),
+    ]);
+    expect(summary.body.drivers).toEqual([
+      expect.objectContaining({ driverId, journeys: 1, sosTriggered: 1 }),
+    ]);
+
+    const otherSchool = await http()
+      .post('/schools')
+      .set('Authorization', `Bearer ${superAdminToken}`)
+      .send({ name: 'Empty Primary', address: '3 Quiet Lane' })
+      .expect(201);
+    const scoped = await http()
+      .get(`/analytics/summary?from=${today}&to=${today}&schoolId=${otherSchool.body.id}`)
+      .set('Authorization', `Bearer ${superAdminToken}`)
+      .expect(200);
+    expect(scoped.body.journeys.total).toBe(0);
+    expect(scoped.body.emergencies.total).toBe(0);
+
+    const csv = await http()
+      .get(`/analytics/journeys.csv?from=${today}&to=${today}`)
+      .set('Authorization', `Bearer ${superAdminToken}`)
+      .expect(200);
+    expect(csv.headers['content-type']).toContain('text/csv');
+    expect(csv.headers['content-disposition']).toContain('attachment');
+    const lines = csv.text.trim().split('\r\n');
+    expect(lines).toHaveLength(2);
+    expect(lines[1].startsWith(`${journeyId},${today},TO_SCHOOL,COMPLETED,`)).toBe(true);
+
+    await http()
+      .get('/analytics/summary?from=2026-02-01&to=2026-01-01')
+      .set('Authorization', `Bearer ${superAdminToken}`)
+      .expect(400);
+    await http()
+      .get('/analytics/summary')
+      .set('Authorization', `Bearer ${parentToken}`)
+      .expect(403);
+    await http()
+      .get('/analytics/summary')
+      .set('Authorization', `Bearer ${driverToken}`)
+      .expect(403);
   });
 });

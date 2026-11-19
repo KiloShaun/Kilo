@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { api, ApiError, AuthenticatedUser, Child, InvitedAccountResult, School } from './api';
+import AnalyticsPanel from './AnalyticsPanel';
 import { EmergencyPanel, FleetPanel, JourneysPanel, NotificationsPanel, RoutesPanel } from './OperationsPanels';
 
 interface Props {
@@ -392,6 +393,8 @@ export default function Dashboard({ token, user, onLogout }: Props) {
       {canManageRoutes && <JourneysPanel token={token} user={user} />}
 
       {canManage && <EmergencyPanel token={token} />}
+
+      {canManageRoutes && <AnalyticsPanel token={token} user={user} schools={schools} />}
 
       <NotificationsPanel token={token} />
     </div>

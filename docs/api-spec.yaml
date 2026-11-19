@@ -30,6 +30,7 @@ tags:
   - name: tracking
   - name: notifications
   - name: emergency
+  - name: analytics
 
 paths:
   /auth/register:
@@ -559,6 +560,40 @@ paths:
     post: { tags: [emergency], x-status: implemented, summary: "Operator acknowledges an incident (idempotent)" }
   /emergency/{id}/resolve:
     post: { tags: [emergency], x-status: implemented, summary: "Operator resolves an incident with an optional note (idempotent)" }
+  /analytics/summary:
+    get:
+      tags: [analytics]
+      x-status: implemented
+      summary: "Operational report for a date range (SUPER_ADMIN, TRANSPORT_OPERATOR, SCHOOL_ADMIN — the latter pinned to their own school)"
+      description: |
+        Journey totals and completion rate (completed / (completed + cancelled)), average
+        start-to-end duration, delays, child pickup outcomes (cancelled journeys excluded),
+        SOS counts and mean minutes to acknowledge/resolve, a zero-filled daily series, and
+        per-route and per-driver breakdowns. Rates are percentages to one decimal, or null when
+        the denominator is zero. On-time % is intentionally absent (no route timezone, no
+        per-child scheduled times).
+      parameters:
+        - { name: from, in: query, schema: { type: string, format: date }, description: "Inclusive; default 29 days before `to`" }
+        - { name: to, in: query, schema: { type: string, format: date }, description: "Inclusive; default today (UTC). Range at most 366 days." }
+        - { name: schoolId, in: query, schema: { type: string, format: uuid }, description: "Ignored for SCHOOL_ADMIN" }
+      responses:
+        '200': { description: "AnalyticsSummary — see src/analytics/analytics.aggregate.ts for the exact shape" }
+        '400': { description: "INVALID_DATE_RANGE / DATE_RANGE_TOO_LARGE / validation error" }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /analytics/journeys.csv:
+    get:
+      tags: [analytics]
+      x-status: implemented
+      summary: "Per-journey CSV export for the same range and scoping as /analytics/summary"
+      parameters:
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+        - { name: schoolId, in: query, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: "RFC 4180 CSV (CRLF), one row per journey, served as an attachment. Cells starting with = + - @ are prefixed with ' to prevent formula injection."
+          content: { text/csv: { schema: { type: string } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /drivers:
     get: { tags: [drivers], x-status: implemented, summary: "List drivers (SUPER_ADMIN, TRANSPORT_OPERATOR, SCHOOL_ADMIN)" }
   /vehicles:

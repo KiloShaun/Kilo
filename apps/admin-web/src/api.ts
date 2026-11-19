@@ -191,6 +191,98 @@ async function request<T>(path: string, options: RequestInit = {}, token?: strin
   return body as T;
 }
 
+export interface AnalyticsQuery {
+  from: string;
+  to: string;
+  schoolId?: string;
+}
+
+export interface AnalyticsSummary {
+  period: { from: string; to: string; days: number };
+  journeys: {
+    total: number;
+    completed: number;
+    cancelled: number;
+    inProgress: number;
+    scheduled: number;
+    completionRate: number | null;
+    avgDurationMinutes: number | null;
+    byDirection: { TO_SCHOOL: number; FROM_SCHOOL: number };
+    delaysReported: number;
+    journeysWithDelay: number;
+  };
+  children: {
+    total: number;
+    pickedUp: number;
+    droppedOff: number;
+    missedPickups: number;
+    notRecorded: number;
+    missedPickupRate: number | null;
+  };
+  emergencies: {
+    total: number;
+    byStatus: { TRIGGERED: number; ACKNOWLEDGED: number; RESOLVED: number };
+    avgMinutesToAcknowledge: number | null;
+    avgMinutesToResolve: number | null;
+  };
+  daily: { date: string; journeys: number; completed: number; cancelled: number; missedPickups: number; delays: number }[];
+  routes: {
+    routeId: string;
+    routeName: string;
+    schoolId: string;
+    schoolName: string;
+    journeys: number;
+    completed: number;
+    cancelled: number;
+    completionRate: number | null;
+    avgDurationMinutes: number | null;
+    delays: number;
+    missedPickups: number;
+    missedPickupRate: number | null;
+  }[];
+  drivers: {
+    driverId: string;
+    driverName: string;
+    journeys: number;
+    completed: number;
+    avgDurationMinutes: number | null;
+    delays: number;
+    missedPickups: number;
+    sosTriggered: number;
+  }[];
+}
+
+function analyticsQueryString(query: AnalyticsQuery): string {
+  const params = new URLSearchParams({ from: query.from, to: query.to });
+  if (query.schoolId) params.set('schoolId', query.schoolId);
+  return params.toString();
+}
+
+/** Fetches the CSV export with the bearer token (a plain link can't carry it) and saves it. */
+export async function downloadJourneysCsv(token: string, query: AnalyticsQuery): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/analytics/journeys.csv?${analyticsQueryString(query)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => undefined);
+    throw new ApiError(
+      response.status,
+      body?.error?.code ?? 'UNKNOWN_ERROR',
+      body?.error?.message ?? `Request failed with status ${response.status}.`,
+    );
+  }
+  const disposition = response.headers.get('Content-Disposition') ?? '';
+  const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? 'homesafe-journeys.csv';
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 export const api = {
   register: (dto: { email: string; password: string; firstName: string; lastName: string; phoneNumber?: string }) =>
     request<AuthTokens>('/auth/register', { method: 'POST', body: JSON.stringify(dto) }),
@@ -323,4 +415,7 @@ export const api = {
 
   resolveIncident: (token: string, id: string, note?: string) =>
     request<EmergencyIncident>(`/emergency/${id}/resolve`, { method: 'POST', body: JSON.stringify({ note }) }, token),
+
+  getAnalyticsSummary: (token: string, query: AnalyticsQuery) =>
+    request<AnalyticsSummary>(`/analytics/summary?${analyticsQueryString(query)}`, {}, token),
 };
