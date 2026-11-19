@@ -13,6 +13,8 @@ async function bootstrap() {
   app.enableCors({
     origin: configService.get<string[]>('security.corsOrigins', []),
     credentials: true,
+    // Lets a browser on another origin read the CSV export's filename (GET /analytics/journeys.csv).
+    exposedHeaders: ['Content-Disposition'],
   });
 
   app.useGlobalPipes(

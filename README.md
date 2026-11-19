@@ -25,7 +25,7 @@ Start here before touching code:
 
 ## What's implemented today
 
-Every phase except analytics (Phase 11) is built and tested end-to-end — see
+Every phase of the MVP roadmap, including analytics (Phase 11), is built and tested end-to-end — see
 [`docs/mvp-roadmap.md`](docs/mvp-roadmap.md) for the full phase-by-phase breakdown, including
 what deliberately isn't done (ETA calculation, a real map provider, real push/SMS/WhatsApp
 delivery, NFC/RFID hardware integration) and why.
@@ -45,6 +45,9 @@ delivery, NFC/RFID hardware integration) and why.
   provider-swappable interface (only the in-app channel is actually wired to a provider).
 - **Emergency/SOS**: trigger (snapshotting every child currently on the vehicle),
   acknowledge, resolve — each notifying the right operators and parents.
+- **Analytics & reporting**: a role-scoped summary (journey completion, durations, delays,
+  missed pickups, SOS response times, daily trend, per-route and per-driver breakdowns) and a
+  per-journey CSV export, surfaced as a panel in the admin app.
 - **Three web apps** (`apps/admin-web`, `apps/driver-web`, `apps/parent-web`, all React +
   Vite, all calling the live API — nothing mocked) covering the full admin/driver/parent
   experience, verified together with a real cross-app Playwright run (see

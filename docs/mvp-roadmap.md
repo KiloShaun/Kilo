@@ -15,7 +15,7 @@ no phase is "half of a feature."
 | 8 | Notifications | **Built** — in-app feed via a provider-swappable interface; only the in-app channel is wired to a real provider (see below) |
 | 9 | Admin dashboard (web) | **Built** — schools, staff, fleet, routes, live journeys, notifications, emergency ops |
 | 10 | Emergency / SOS | **Built** — trigger, affected-children snapshot, acknowledge/resolve, notification fan-out |
-| 11 | Analytics and reporting | Not started |
+| 11 | Analytics and reporting | **Built** — role-scoped summary + per-journey CSV export, admin dashboard panel |
 
 WhatsApp, NFC/RFID hardware integration, SMS, and route optimisation are explicitly
 post-core-platform, per the brief, and remain unbuilt.
@@ -63,14 +63,32 @@ post-core-platform, per the brief, and remain unbuilt.
   position was given, `OPERATOR_NOTIFIED`, `PARENTS_NOTIFIED`), and notifies every operator
   (`SUPER_ADMIN`, `TRANSPORT_OPERATOR`, the journey's school's admins) plus every affected
   child's parent. `POST /emergency/:id/acknowledge` and `.../resolve` are idempotent.
+- **Analytics & reporting** (Phase 11): `AnalyticsModule` — `GET /analytics/summary` and
+  `GET /analytics/journeys.csv`, both taking `from`/`to` (inclusive `YYYY-MM-DD`, default the
+  last 30 days, at most 366) and an optional `schoolId`. `SUPER_ADMIN`/`TRANSPORT_OPERATOR`
+  may pick any school or all of them; a `SCHOOL_ADMIN` is pinned to their own school whatever
+  they pass; drivers and parents get 403. Every figure is computed on read from the journey,
+  child-journey, event and incident rows the rest of the platform already writes — no
+  separate analytics store to drift. The metric definitions live in one pure, unit-tested
+  function (`src/analytics/analytics.aggregate.ts`): completion rate is over journeys that
+  reached a terminal state (completed + cancelled), child metrics ignore cancelled runs,
+  missed-pickup rate is over pickups with a recorded outcome, and "not recorded" flags
+  children a driver never marked on a completed run. The CSV export guards against
+  spreadsheet formula injection, since route/school/driver names are user-supplied.
+  **On-time % is deliberately not reported**: `ChildJourney.scheduledPickupTime` is never
+  populated and `RouteStop` times are `HH:mm` with no route timezone, so any on-time figure
+  would be a guess. Aggregation happens in memory over a selective query, which is fine at
+  MVP scale; a materialised daily rollup is the obvious next step if a year-long report for
+  a large operator gets slow.
 - Global request validation, a consistent `{ error: { code, message, correlationId } }`
   envelope, correlation IDs, structured logging, an audit-log interceptor on mutating admin
   actions, and Swagger/OpenAPI docs at `/api/docs`.
-- 59 unit tests + a 28-case e2e suite (`test/full-platform-lifecycle.e2e-spec.ts`) exercising
+- 77 unit tests + a 29-case e2e suite (`test/full-platform-lifecycle.e2e-spec.ts`) exercising
   the entire chain against real Postgres and Redis: provisioning every role, building a
   route, scheduling a journey, starting it, reporting GPS and reading it back as a scoped
   parent, picking up and dropping off a child idempotently, triggering/acknowledging/
-  resolving an SOS, and completing the journey.
+  resolving an SOS, completing the journey, and reading the result back through the
+  analytics summary and CSV export with school scoping and role refusals checked.
 
 ### Three web apps, one shared pattern
 
@@ -128,7 +146,8 @@ a regression test added for the last one.
 
 ## What's genuinely not done
 
-- **Analytics/reporting (Phase 11)** — not started.
+- **On-time performance** — not computable from today's data (see Phase 11 above); needs a
+  route timezone and per-child scheduled times written at journey creation.
 - **ETA calculation** — the tracking endpoint classifies freshness, not a predicted arrival
   time.
 - **Real push/SMS/WhatsApp/email delivery** — the provider interface exists; no provider

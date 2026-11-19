@@ -31,6 +31,7 @@ import { JourneysModule } from './journeys/journeys.module';
 import { TrackingModule } from './tracking/tracking.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { EmergencyModule } from './emergency/emergency.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { EmergencyModule } from './emergency/emergency.module';
     TrackingModule,
     NotificationsModule,
     EmergencyModule,
+    AnalyticsModule,
   ],
   providers: [
     // Guards run in order: rate limit first, then authenticate, then authorize.
